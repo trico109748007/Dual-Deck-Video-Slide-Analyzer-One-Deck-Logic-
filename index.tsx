@@ -79,6 +79,15 @@ const App = () => {
 
       video.onloadedmetadata = async () => {
         const duration = video.duration;
+
+        // Validation: Check if duration is valid and finite
+        if (!Number.isFinite(duration) || duration <= 0) {
+          console.warn("Invalid video duration:", duration);
+          URL.revokeObjectURL(video.src);
+          resolve([]);
+          return;
+        }
+
         // Sample every 5 seconds, max 60 frames to fit context
         let interval = 5; 
         if (duration / interval > 60) {
@@ -90,7 +99,14 @@ const App = () => {
 
         for (let time = 0; time < duration; time += interval) {
           await new Promise<void>((r) => {
+            // Safety check: Ensure currentTime doesn't exceed duration
+            if (time > duration) {
+               r();
+               return;
+            }
+
             video.currentTime = time;
+            
             video.onseeked = () => {
               if (ctx) {
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -103,10 +119,23 @@ const App = () => {
               }
               r();
             };
+
+            // Handle seek errors
+            video.onerror = () => {
+                console.warn(`Error seeking to ${time}s`);
+                r();
+            };
           });
         }
         URL.revokeObjectURL(video.src);
         resolve(frames);
+      };
+
+      // Handle general video load errors
+      video.onerror = () => {
+          console.error("Failed to load video metadata");
+          URL.revokeObjectURL(video.src);
+          resolve([]);
       };
     });
   };
